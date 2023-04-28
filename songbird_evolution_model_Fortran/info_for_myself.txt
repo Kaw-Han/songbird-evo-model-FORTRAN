@@ -1,0 +1,24 @@
+when compiling, call external modules before file name
+
+use elemental (subroutine) if you want to "loop" over all the new birds defined in seperate subroutine
+
+
+parameters can be a seperate file
+
+command "contains" seperates the decleration from the model and the subroutines
+
+subroutine gene_init(this) !object that this function works for == this
+
+class(GENE), intent(out) :: this !intent = will the parameters for this subroutine change after this operation? in = input, out = output, inout = both
+
+"elemental"-command makes this work for an array of birds and increments.
+    use like this: ex)
+
+        elemental subroutine bird_growth(this, increment)
+            class(BIRD), intent(inout) :: this
+            real, intent(in) :: increment
+
+            this%weight = this%weight + increment
+
+
+        end subroutine bird_growth
