@@ -35,27 +35,33 @@ module params
 
     real, parameter, public :: BIRD_INITIAL_WEIGHT = 10.0 !20 grams 
     real, parameter, public :: BIRD_MAXIMUM_WEIGHT_MULTIPLICATOR = 4 !The number we multiply initial weight with. This defines birds maximum weight.
-    real, parameter, public :: BIRD_MINIMUM_WEIGHT_MULTIPLICATOR = 0.25 !The number we multiply initial weight with. This defines birds minimum weight. 
+    real, parameter, public :: BIRD_MINIMUM_WEIGHT_MULTIPLICATOR = 0.4 !The number we multiply initial weight with. This defines birds minimum weight. 
     real, parameter, public :: WEIGHT_REDUCTION_CONSTANT = 0.0015 !Only for when the bird encounters predator, but escapes. The added stress of escape will manifest in excess weight reduction.
-    real, parameter, public :: METABOLIC_COST_CONSTANT = 0.0001025 ! The cost of life to be multiplied with birds weight.
+    real, parameter, public :: METABOLIC_COST_CONSTANT = 0.0001 ! The cost of life to be multiplied with birds weight.
 
     real, parameter, public :: FEAR_DECAY_RATE = 0.02 ! Adjust this value as needed
-    real, parameter, public :: HUNGER_MAX_DECREMENT = 0. !do we need this??????
     real, parameter, public :: FEAR_INCREMENT_AFTER_ATTACK = 0.3 !This is the increased fear of the bird in attack situations.
 
-    real, parameter, public :: HUNGER_PLASTICITY = 0.75  ! Param for variation in hunger between birds. 
-    real, parameter, public :: FEAR_PLASTICITY = 0.75
+    real, parameter, public :: HUNGER_PLASTICITY = 1 ! Param for variation in hunger between birds. 
+    real, parameter, public :: FEAR_PLASTICITY = 1
 
     real, parameter, public :: EXPLORATION_PROBABILITY = 0.001 !Should be between 0.0 and 1.0 (most likely below 0.1)
-    !Variables for fraction in fuction bird_eat_fraction_when_fear
-    real, parameter, public :: FRAC_S1 = 0.95 !max value 
-    real, parameter, public :: FRAC_S2 = 0.5 !min val
-    real, parameter, public :: SIGM_K = 1.75
+   
+   
+    !params for fraction in fuction bird_eat_fraction_when_fear
+    real, parameter, public :: FRAC_S1_FEAR = 1 !max value 
+    real, parameter, public :: FRAC_S2_FEAR = 0.3 !min val
+    real, parameter, public :: SIGM_K_FEAR= 1.5
+
+    !params for fraction in fuction bird_eat_fraction_when_hunger
+    real, parameter, public :: FRAC_S1_HUNGER = .9 !max value 
+    real, parameter, public :: FRAC_S2_HUNGER = 0 !min val
+    real, parameter, public :: SIGM_K_HUNGER = 1.25
 
     !bird limit_food_intake params:
-    real, parameter, public :: SIGMOID_STEEPNESS = 2
-    real, parameter, public :: SIGMOID_MIDPOINT = 0.475
-    real, parameter, public :: FEAR_INCREASE_FACTOR = 0.025
+    real, parameter, public :: SIGMOID_STEEPNESS = 1
+    real, parameter, public :: SIGMOID_MIDPOINT = 0.5
+    real, parameter, public :: VIGILANCE_FACTOR = 0.01
 
 ! ========================================
 
@@ -76,8 +82,8 @@ module params
 ! =========== ENVIRONMENT ====================
     integer, parameter, public :: ENVIRONMENT_SIZE = 100 !size of envornment, nr of cells = 100
 
-    real, parameter, public :: FOOD_AVAILABILITY_MEAN = 5, FOOD_AVAILABILITY_VARIANCE = 2 !parameter for food, measured in weight grams added to the birds mass
-    real, parameter, public :: FOOD_AVAILABILITY_MIN = 3, &
+    real, parameter, public :: FOOD_AVAILABILITY_MEAN = 3, FOOD_AVAILABILITY_VARIANCE = 2 !parameter for food, measured in weight grams added to the birds mass
+    real, parameter, public :: FOOD_AVAILABILITY_MIN = 1, &
         FOOD_AVAILABILITY_MAX = FOOD_AVAILABILITY_MEAN + FOOD_AVAILABILITY_VARIANCE 
 ! ===========================================
 
@@ -118,7 +124,7 @@ module params
     
     integer, parameter, public :: EASY_GENERATIONS = 20 !10 for testing, 20 for sim
 
-    integer, parameter, public :: POP_SIZE = 10000
+    integer, parameter, public :: POP_SIZE = 5000
 
 
 
@@ -1325,38 +1331,27 @@ function bird_is_within_environment_check(this, environment_in) result(is_within
 end function bird_is_within_environment_check
 
 
-subroutine predator_attack_bird(this, bird_prey, environment_in,              &
-                                predator_is_present, prey_is_killed)
+subroutine predator_attack_bird(this, bird_prey, environment_in, predator_is_present, prey_is_killed)
+  class(PREDATOR), intent(in) :: this
+  class(BIRD), intent(inout) :: bird_prey
+  class(whole_environ), intent(in) :: environment_in
+  logical, optional, intent(out) :: predator_is_present
+  logical, optional, intent(out) :: prey_is_killed
+  logical :: p_is_present, p_prey_dies
+  real :: escape_chance, fear_gene_factor
 
- class(PREDATOR), intent(in) :: this
- class(BIRD), intent (inout) :: bird_prey
- class(whole_environ), intent(in) :: environment_in
+  p_is_present = .FALSE.
+  p_prey_dies = .FALSE.
 
- logical, optional, intent(out) :: predator_is_present
- logical, optional, intent(out) :: prey_is_killed
-
-
- logical :: p_is_present, p_prey_dies
-
-
- p_is_present = .FALSE.
- p_prey_dies = .FALSE.
-
-
- if (bird_prey%is_alive) then
-   
-
-     if (IS_DEBUG_DATA .AND. .NOT. bird_prey%is_within(environment_in)) then
-       print*, "WARNING: Bird not in correct environment" 
-     end if
-
-    ! Check if the predator is present in the cell, given the risk of predation.
-    p_is_present = (RAND() < environment_in%point( bird_prey%location%x )%predator_frequency)
-    
+  if (bird_prey%is_alive) then
+    p_is_present = (RAND() < environment_in%point(bird_prey%location%x)%predator_frequency)
     
     if (p_is_present) then
-      ! We check if the predator will attack given it is in the same cell as the prey.
-      if (Is_Evolutionary_Generations) p_prey_dies = ( RAND() < this%risk )
+      if (Is_Evolutionary_Generations) then
+        fear_gene_factor = real(bird_prey%gene_fear) / real(FEAR_MAX)
+        escape_chance = 0.2 * fear_gene_factor  ! Adjust the 0.2 factor as needed
+        p_prey_dies = (RAND() < (this%risk * (1.0 - escape_chance)))
+      end if
 
       if (p_prey_dies) then
         bird_prey%is_alive = .FALSE.
@@ -1365,22 +1360,21 @@ subroutine predator_attack_bird(this, bird_prey, environment_in,              &
       else
         bird_prey%is_alive = .TRUE.
         bird_prey%bird_meets_predator_counter = bird_prey%bird_meets_predator_counter + 1
-        bird_prey%weight = bird_prey%weight - bird_prey%weight *                                &
-        (WEIGHT_REDUCTION_CONSTANT**(bird_prey%bird_meets_predator_counter))
+        bird_prey%weight = bird_prey%weight - bird_prey%weight * &
+          (WEIGHT_REDUCTION_CONSTANT**(bird_prey%bird_meets_predator_counter))
         
         bird_prey%state_fear = within( &
-        bird_prey%state_fear + bird_prey%state_fear * FEAR_INCREMENT_AFTER_ATTACK, &
+          bird_prey%state_fear + bird_prey%state_fear * FEAR_INCREMENT_AFTER_ATTACK, &
           bird_prey%genetic_lower_fear(), bird_prey%genetic_upper_fear() )
-          call bird_prey%fear_genetic_limit()      
+        call bird_prey%fear_genetic_limit()      
       end if
     end if
- end if
+  end if
 
- if (present(predator_is_present)) predator_is_present = p_is_present
- if (present(prey_is_killed)) prey_is_killed = p_prey_dies
-
-
+  if (present(predator_is_present)) predator_is_present = p_is_present
+  if (present(prey_is_killed)) prey_is_killed = p_prey_dies
 end subroutine predator_attack_bird
+
 
 
 
@@ -1567,54 +1561,62 @@ end function background_mortality_probability
 subroutine bird_feeds(this, in_environment)
   class(BIRD), intent(inout) :: this
   class(whole_environ), intent(in) :: in_environment
-  real :: current_cell_food, intake_factor, fear_factor
+  real :: current_cell_food, intake_factor, fear_factor, hunger_factor
 
   if (this%is_alive) then 
     current_cell_food = in_environment%point(this%location%x)%food_availability
     intake_factor = limit_food_intake(this)
-    fear_factor = bird_eat_fraction_when_fear(this%state_fear)
-    this%weight = this%weight + current_cell_food * intake_factor * fear_factor
-   ! this%state_hunger = this%state_hunger - this%state_hunger * hunger_decrement(current_cell_food * intake_factor - 1* fear_factor)
-    this%state_hunger = this%state_hunger - this%state_hunger * (intake_factor - 1 * fear_factor)
+    fear_factor = bird_eat_fraction_when_fear(this)
+    hunger_factor = bird_eat_fraction_when_hunger(this)
+    this%weight = this%weight + current_cell_food * intake_factor * fear_factor * hunger_factor
+    this%state_hunger = this%state_hunger - this%state_hunger *      &
+      ((intake_factor * fear_factor * hunger_factor) + (1 - hunger_factor))
 
     call this%hunger_genetic_limit()
   end if
 end subroutine bird_feeds
 
-function hunger_decrement(food_eaten) result (decrement_out) !food_eaten = current cell food
- real, intent(in) :: food_eaten
- real :: decrement_out
- 
- !Function describes how much food is eaten according to hunger value in bird. 
- ! If bird has hunger = 10, it will eat all the food in the environment and therefore 
- ! reduce it by decrement_out
-
- ! if HUNGER_MAX_DECREMENT = 0.5 then: 
-!  0.5 +      *
-!      !    * |
-!      !  *   |
-!      !*     |
-!      +------+-------------
-!             FOO_AVAILABILITY_MAX
-
- decrement_out = HUNGER_MAX_DECREMENT/FOOD_AVAILABILITY_MAX * food_eaten
-
-end function hunger_decrement
 
 
-function bird_eat_fraction_when_fear(emotion) result(fract)
-  real, intent(in) :: emotion
+function bird_eat_fraction_when_fear(this) result(fract)
+  class(BIRD), intent(in) :: this
   real :: fract
-  real :: midpoint
+  real :: midpoint, emotion, fear_gene_factor
+  real :: adjusted_sigm_k
 
-!SIGM_K IS STEEPNESS OF CURVE
-  midpoint = (FEAR_MAX + FEAR_MIN) / 2.0
+  emotion = this%state_fear
+  midpoint = (this%genetic_lower_fear() + this%genetic_upper_fear()) / 2.0
 
-  fract = 1.0 / (1.0 + exp(SIGM_K * (emotion - midpoint)))
-  fract = FRAC_S2 + (FRAC_S1 - FRAC_S2) * fract
+  fear_gene_factor = real(this%gene_fear) / real(FEAR_MAX)
+  adjusted_sigm_k = SIGM_K_FEAR * (1.0 + 0.5 * fear_gene_factor)  ! Adjust the 0.5 factor as needed
 
-  fract = within(fract, 0.0, 1.0)
+  fract = 1.0 / (1.0 + exp(adjusted_sigm_k * (emotion - midpoint)))
+  fract = FRAC_S2_FEAR + (FRAC_S1_FEAR - FRAC_S2_FEAR) * fract
 end function bird_eat_fraction_when_fear
+
+
+function bird_eat_fraction_when_hunger(this) result(fract)
+  class(BIRD), intent(in) :: this
+  real :: fract
+  real :: midpoint, emotion
+
+
+  emotion = this%state_hunger
+!SIGM_K IS STEEPNESS OF CURVE
+  midpoint = (this%genetic_lower_hunger() + this%genetic_upper_hunger()) / 2.0
+
+
+  if (this%weight < BIRD_INITIAL_WEIGHT * (BIRD_MAXIMUM_WEIGHT_MULTIPLICATOR/2)) then
+    fract = 1.0
+  else
+    fract = 1.0 / (1.0 + exp(SIGM_K_HUNGER * (emotion - midpoint)))
+    fract = FRAC_S2_FEAR + (FRAC_S1_HUNGER - FRAC_S2_HUNGER) * fract
+
+  end if
+
+ ! fract = within(fract, 0.0, 1.0)
+end function bird_eat_fraction_when_hunger
+
 
 
 
@@ -1669,28 +1671,31 @@ function limit_food_intake(this) result(intake_factor)
   class(BIRD), intent(inout) :: this
   real :: intake_factor, sigmoid_factor
   real :: weight_ratio, max_weight, min_weight
-
+  real :: gene_influence
+  real, parameter :: GENE_SCALE_FACTOR = 0.0002 ! Adjust as needed
 
   max_weight = BIRD_INITIAL_WEIGHT * BIRD_MAXIMUM_WEIGHT_MULTIPLICATOR
   min_weight = BIRD_INITIAL_WEIGHT * BIRD_MINIMUM_WEIGHT_MULTIPLICATOR
 
   weight_ratio = (this%weight - min_weight) / (max_weight - min_weight)
 
+  ! Calculate gene influence on stomach size
+  gene_influence = 1 + GENE_SCALE_FACTOR * (real(this%gene_hunger) / real(HUNGER_MAX))
+
   ! Sigmoid function
   sigmoid_factor = 1.0 / (1.0 + exp(SIGMOID_STEEPNESS * (weight_ratio - SIGMOID_MIDPOINT)))
 
-  ! Scale the sigmoid output to the desired range
-  intake_factor = 0.01 * sigmoid_factor
+  ! Scale the sigmoid output to the desired range and apply gene influence
+  intake_factor = 0.01 * sigmoid_factor * gene_influence
 
   ! Ensure the intake factor is within the desired range
-  intake_factor = max(0.0, min(0.01, intake_factor))
+  intake_factor = max(0.0, min(0.02, intake_factor))
 
   ! Increase fear based on weight ratio
-  this%state_fear = this%state_fear + (weight_ratio * FEAR_INCREASE_FACTOR)
+  this%state_fear = this%state_fear + (weight_ratio * VIGILANCE_FACTOR)
 
   ! Ensure state_fear stays within genetic limits
   call this%fear_genetic_limit()
-
 end function limit_food_intake
 
 
@@ -1700,7 +1705,7 @@ end function limit_food_intake
 !   real :: weight_ratio, max_weight, min_weight
 !   real, parameter :: MAX_INTAKE = 0.1
 !   real, parameter :: MIN_INTAKE = 0.05
-!   real, parameter :: FEAR_INCREASE_FACTOR = 0.5 ! Adjust this value to control fear increase
+!   real, parameter :: VIGILANCE_FACTOR = 0.5 ! Adjust this value to control fear increase
 
 !   max_weight = BIRD_INITIAL_WEIGHT * BIRD_MAXIMUM_WEIGHT_MULTIPLICATOR
 !   min_weight = BIRD_INITIAL_WEIGHT * BIRD_MINIMUM_WEIGHT_MULTIPLICATOR
@@ -1714,7 +1719,7 @@ end function limit_food_intake
 !   intake_factor = max(MIN_INTAKE, min(MAX_INTAKE + MIN_INTAKE, intake_factor))
 
 !   ! Increase state_fear based on food intake
-!   this%state_fear = this%state_fear + (intake_factor * FEAR_INCREASE_FACTOR)
+!   this%state_fear = this%state_fear + (intake_factor * VIGILANCE_FACTOR)
 
 !   ! Ensure state_fear stays within genetic limits
 !   call this%fear_genetic_limit()
@@ -3093,7 +3098,8 @@ subroutine select_and_reproduce()
 contains
 
 subroutine recombine_genes()
-  integer :: current_bird_index, partner_bird_index, gene_swap_distance, total_alive_birds
+  integer :: current_bird_index, partner_bird_index_fear, partner_bird_index_hunger
+  integer :: gene_swap_distance_fear, gene_swap_distance_hunger, total_alive_birds
   integer, parameter :: MIN_SWAP_DISTANCE = 50, MAX_SWAP_DISTANCE = 150
   type(BIRD) :: temp_bird_storage
 
@@ -3101,27 +3107,33 @@ subroutine recombine_genes()
 
   if (total_alive_birds < MIN_SWAP_DISTANCE + 1) return
 
- ! if (RAND() > 0.5) then
-    do current_bird_index = 1, total_alive_birds - MIN_SWAP_DISTANCE
-      gene_swap_distance = INT(RAND() * (MAX_SWAP_DISTANCE - MIN_SWAP_DISTANCE + 1)) + MIN_SWAP_DISTANCE
+  do current_bird_index = 1, total_alive_birds - MIN_SWAP_DISTANCE
+    ! Generate different swap distances for fear and hunger genes
+    gene_swap_distance_fear = INT(RAND() * (MAX_SWAP_DISTANCE - MIN_SWAP_DISTANCE + 1)) + MIN_SWAP_DISTANCE
+    gene_swap_distance_hunger = INT(RAND() * (MAX_SWAP_DISTANCE - MIN_SWAP_DISTANCE + 1)) + MIN_SWAP_DISTANCE
 
-      partner_bird_index = min(current_bird_index + gene_swap_distance, total_alive_birds)
+    ! Ensure different partner birds for fear and hunger genes
+    partner_bird_index_fear = min(current_bird_index + gene_swap_distance_fear, total_alive_birds)
+    partner_bird_index_hunger = min(current_bird_index + gene_swap_distance_hunger, total_alive_birds)
 
-      associate(current_bird => offspring_generation%birds(current_bird_index), &
-                partner_bird => offspring_generation%birds(partner_bird_index))
-        
-        temp_bird_storage%gene_fear = current_bird%gene_fear
-        current_bird%gene_fear = partner_bird%gene_fear
-        partner_bird%gene_fear = temp_bird_storage%gene_fear
+    ! Recombine fear genes
+    associate(current_bird => offspring_generation%birds(current_bird_index), &
+              partner_bird_fear => offspring_generation%birds(partner_bird_index_fear))
+      temp_bird_storage%gene_fear = current_bird%gene_fear
+      current_bird%gene_fear = partner_bird_fear%gene_fear
+      partner_bird_fear%gene_fear = temp_bird_storage%gene_fear
+    end associate
 
-        !temp_bird_storage%gene_hunger = current_bird%gene_hunger
-        !current_bird%gene_hunger = partner_bird%gene_hunger
-        !partner_bird%gene_hunger = temp_bird_storage%gene_hunger
-
-      end associate
-    end do
- ! end if
+    ! Recombine hunger genes
+    associate(current_bird => offspring_generation%birds(current_bird_index), &
+              partner_bird_hunger => offspring_generation%birds(partner_bird_index_hunger))
+      temp_bird_storage%gene_hunger = current_bird%gene_hunger
+      current_bird%gene_hunger = partner_bird_hunger%gene_hunger
+      partner_bird_hunger%gene_hunger = temp_bird_storage%gene_hunger
+    end associate
+  end do
 end subroutine recombine_genes
+
 
 
 
