@@ -51,17 +51,17 @@ module params
     !params for fraction in fuction bird_eat_fraction_when_fear
     real, parameter, public :: FRAC_S1_FEAR = 1 !max value 
     real, parameter, public :: FRAC_S2_FEAR = 0.3 !min val
-    real, parameter, public :: SIGM_K_FEAR= 1.5
+    real, parameter, public :: SIGM_K_FEAR= 1.75
 
     !params for fraction in fuction bird_eat_fraction_when_hunger
-    real, parameter, public :: FRAC_S1_HUNGER = .9 !max value 
+    real, parameter, public :: FRAC_S1_HUNGER = .95 !max value 
     real, parameter, public :: FRAC_S2_HUNGER = 0 !min val
     real, parameter, public :: SIGM_K_HUNGER = 1.25
 
     !bird limit_food_intake params:
     real, parameter, public :: SIGMOID_STEEPNESS = 1
     real, parameter, public :: SIGMOID_MIDPOINT = 0.5
-    real, parameter, public :: VIGILANCE_FACTOR = 0.01
+    real, parameter, public :: VIGILANCE_FACTOR = 0.015
 
 ! ========================================
 
@@ -70,20 +70,22 @@ module params
    real, parameter, public :: FREQUENCY_OF_PREDATOR_MAX = 0.15
 
    ! For signal generations only:
-   real, parameter, public :: FEAR_SIGNAL_MULTIPLIER = 1.0 ! if 1 then we are in evolutionary gens. 
+   real, parameter, public :: FEAR_SIGNAL_MULTIPLIER = 6 ! if 1 then we are in evolutionary gens. 
 
 !parameter for predation_risk, risk of the bird to meet predator in a particular environment.
 ! if the bird sees the predator, the predator sees the bird.
 
-  real, parameter, public :: ATTACK_RATE = 0.15!risk of bird being eaten by predator if attacked. 0.1 if Is_Evolutionary_Gens
-  
+!Is_Evolutionary_Gens == .TRUE. then: 
+ ! real, parameter, public :: ATTACK_RATE = 0.15!risk of bird being eaten by predator if attacked. 0.1 if Is_Evolutionary_Gens
+!Is_Evolutionary_Gens == .FALSE. then: 
+  real, parameter, public :: ATTACK_RATE = 0 !ecological experiment: predator attack switched off!
 !  ========================================
 
 ! =========== ENVIRONMENT ====================
     integer, parameter, public :: ENVIRONMENT_SIZE = 100 !size of envornment, nr of cells = 100
 
-    real, parameter, public :: FOOD_AVAILABILITY_MEAN = 3, FOOD_AVAILABILITY_VARIANCE = 2 !parameter for food, measured in weight grams added to the birds mass
-    real, parameter, public :: FOOD_AVAILABILITY_MIN = 1, &
+    real, parameter, public :: FOOD_AVAILABILITY_MEAN = 5, FOOD_AVAILABILITY_VARIANCE = 2 !parameter for food, measured in weight grams added to the birds mass
+    real, parameter, public :: FOOD_AVAILABILITY_MIN = 4, &
         FOOD_AVAILABILITY_MAX = FOOD_AVAILABILITY_MEAN + FOOD_AVAILABILITY_VARIANCE 
 ! ===========================================
 
@@ -117,14 +119,14 @@ module params
     !Population size
     integer, parameter, public :: GENERATIONS = 300
    ! 30 for testing, 300 for sim. 
-    integer, parameter, public :: SIGNAL_ONLY_GENERATIONS = 1 !10 for testing fear only, 
+    integer, parameter, public :: SIGNAL_ONLY_GENERATIONS = 10 !10 for testing fear only, 
                                                                !5 for theoretical experiment with factor from file and no mutation. 
 
     !Generations for when attack_rate is turned off and only signal remains
     
     integer, parameter, public :: EASY_GENERATIONS = 20 !10 for testing, 20 for sim
 
-    integer, parameter, public :: POP_SIZE = 5000
+    integer, parameter, public :: POP_SIZE = 10000
 
 
 
@@ -684,6 +686,7 @@ end module params
 module environment
 
 use params
+use BASE_RANDOM
 implicit none
 
 ! Spatial location at one cell, in the initial model it is
@@ -727,7 +730,7 @@ contains
 ! This subroutine places the basic spatial object (location class) to a
 ! random place.
 subroutine location_place_random(this, min_pos, max_pos)
-    use BASE_RANDOM
+  use BASE_RANDOM
     class(location), intent(inout) :: this
     ! Optional parameters defining a range of positions to place the spatial
     ! object, but by default the position is from 1 to ENVIRONMENT_SIZE
@@ -750,7 +753,6 @@ subroutine location_place_random(this, min_pos, max_pos)
     this%x = RAND(min_loc, max_loc)
 
 end subroutine location_place_random
-
 ! Place a spatial object to a specific location (cell) within the environment
 subroutine location_place_object_location(this, where)
     class(location), intent(inout) :: this
@@ -1349,7 +1351,7 @@ subroutine predator_attack_bird(this, bird_prey, environment_in, predator_is_pre
     if (p_is_present) then
       if (Is_Evolutionary_Generations) then
         fear_gene_factor = real(bird_prey%gene_fear) / real(FEAR_MAX)
-        escape_chance = 0.2 * fear_gene_factor  ! Adjust the 0.2 factor as needed
+        escape_chance = 0.002 * fear_gene_factor  ! small added chance of escape with high fear allele. 
         p_prey_dies = (RAND() < (this%risk * (1.0 - escape_chance)))
       end if
 

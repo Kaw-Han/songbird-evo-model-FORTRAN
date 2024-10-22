@@ -1,0 +1,33 @@
+@startuml model_flowchart
+scale 300 width
+skinparam dpi 300
+
+title Genetic Algorithm Simulation Flow Chart
+skinparam defaultFontName "Lucida Bright"
+start
+:Initialize Environment and Population;
+repeat
+  :Initialize/Update Predator;
+  :Run Time Steps for Parent Generation;
+  note right
+    For each bird:
+    * Move
+    * Feed
+    * Update states
+    * Check predator attacks
+    * Check starvation
+  end note
+  :Sort Population by Fitness;
+  :Build Output Data;
+  if (Enough surviving birds?) then (yes)
+    :Select and Reproduce;
+    :Swap Generations;
+  else (no)
+    :Write Warning;
+    stop
+  endif
+repeat while (More generations?) is (yes)
+:Save Final Output Data;
+stop
+
+@enduml

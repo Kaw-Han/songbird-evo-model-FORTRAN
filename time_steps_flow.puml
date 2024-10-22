@@ -1,0 +1,49 @@
+@startuml time_steps_flow
+
+scale 400 width
+skinparam dpi 300
+
+title Time steps
+
+skinparam defaultFontName "Lucida Bright"
+
+start
+
+while (Current Time Step < Max Time Steps) is (yes)
+  :Initialize bird;
+  if (Is bird alive?) then (yes)
+    :Check if bird is starved;
+    if (Is bird starved?) then (yes) 
+      :Kill bird;
+      stop
+    else (no)
+      :Bird flies;
+      :Predator may attack bird;
+      if (Bird survives predator attack?) then (yes)
+        :Bird feeds;
+        :Bird pays metabolic cost;
+        :Bird may explore;
+        :Check for background mortality;
+        :Decay fear;
+        :Ensure genetic limits for fear and hunger;
+        if (Is debug data enabled?) then (yes)
+          :Add weight to history;
+          :Add emotion state to history;
+        endif
+      else (no)
+        :Kill bird;
+        stop
+      endif
+    endif
+  else (no)
+    :Bird is dead;
+    stop
+  endif
+endwhile (no)
+
+:Time steps complete;
+
+stop
+
+
+@enduml 
